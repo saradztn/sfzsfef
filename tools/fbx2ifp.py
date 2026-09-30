@@ -73,6 +73,84 @@ BONE_MAP = {
     'RightToe':   (54, ' R Toe0',    'RightToeTip'),
 }
 
+# Mixamo rig (mixamorig:* - prefix stripped by index_models). Mixamo has no
+# bone above Hips: 'Root' is a virtual static node (root motion still comes
+# from the Hips). Spine1+Spine2 fold into SA Spine1 (Spine2 drives).
+BONE_MAP_MIXAMO = {
+    'Root':       (0, 'Root',        'Hips'),
+    'Hips':       (1, ' Pelvis',     'Spine'),
+    'Spine':      (2, ' Spine',      'Spine1'),
+    'Spine1':     (3, ' Spine1',     None),    # folded
+    'Spine2':     (3, ' Spine1',     'Neck'),
+    'Neck':       (4, ' Neck',       'Head'),
+    'Head':       (5, ' Head',       'HeadTop_End'),
+    'LeftShoulder':  (31, 'Bip01 L Clavicle', 'LeftArm'),
+    'LeftArm':       (32, ' L UpperArm',      'LeftForeArm'),
+    'LeftForeArm':   (33, ' L ForeArm',       'LeftHand'),
+    'LeftHand':      (34, ' L Hand',          'LeftHandMiddle1'),
+    'LeftHandIndex1': (35, ' L Finger',       'LeftHandIndex2'),
+    'LeftHandIndex2': (36, 'L Finger01',      'LeftHandIndex3'),
+    'RightShoulder': (21, 'Bip01 R Clavicle', 'RightArm'),
+    'RightArm':      (22, ' R UpperArm',      'RightForeArm'),
+    'RightForeArm':  (23, ' R ForeArm',       'RightHand'),
+    'RightHand':     (24, ' R Hand',          'RightHandMiddle1'),
+    'RightHandIndex1': (25, ' R Finger',      'RightHandIndex2'),
+    'RightHandIndex2': (26, 'R Finger01',     'RightHandIndex3'),
+    'LeftUpLeg':  (41, ' L Thigh',   'LeftLeg'),
+    'LeftLeg':    (42, ' L Calf',    'LeftFoot'),
+    'LeftFoot':   (43, ' L Foot',    'LeftToeBase'),
+    'LeftToeBase': (44, ' L Toe0',   'LeftToe_End'),
+    'RightUpLeg': (51, ' R Thigh',   'RightLeg'),
+    'RightLeg':   (52, ' R Calf',    'RightFoot'),
+    'RightFoot':  (53, ' R Foot',    'RightToeBase'),
+    'RightToeBase': (54, ' R Toe0',  'RightToe_End'),
+}
+
+# (label, bone map, name of a virtual static root or None)
+PRESETS = [('Newton/Rokoko', BONE_MAP, None),
+           ('Mixamo', BONE_MAP_MIXAMO, 'Root')]
+# bones that may be absent (they then keep the DFF bind pose)
+OPTIONAL_IDS = {25, 26, 35, 36, 44, 54}
+
+
+class StaticNode:
+    """Virtual non-animated node at the origin (Mixamo has no Root bone)."""
+    def __init__(self, name):
+        self.name = name
+        self.parent = None
+        self.bind = None
+        self.children = []
+
+    def world_mat(self, t, eval_curves=True):
+        return [[1.0, 0, 0, 0], [0, 1.0, 0, 0], [0, 0, 1.0, 0], [0, 0, 0, 1.0]]
+
+
+def resolve_rig(rig, bone_map=None):
+    """Pick the bone-map preset that fits the FBX; returns dict with
+    label, bone_map (pruned to present bones), by_name, missing (required)."""
+    by_name = index_models(rig)
+    cands = PRESETS if bone_map is None else [('custom', bone_map, None)]
+    best = None
+    for label, bm, vroot in cands:
+        src_of = build_src_of(bm)
+        req = sorted({nm for nm, v in bm.items()
+                      if v[0] not in OPTIONAL_IDS and nm != vroot})
+        found = [nm for nm in req if nm in by_name]
+        score = len(found) / float(len(req))
+        if best is None or score > best[0]:
+            best = (score, label, bm, vroot, [nm for nm in req if nm not in by_name])
+    score, label, bm, vroot, missing = best
+    by_name = dict(by_name)
+    if vroot and vroot not in by_name:
+        by_name[vroot] = StaticNode(vroot)
+    pruned = {}
+    for nm, (bid, sa, aim) in bm.items():
+        if nm in by_name:
+            pruned[nm] = (bid, sa, aim if aim in by_name else None)
+    return dict(label=label, bone_map=pruned, by_name=by_name,
+                missing=missing, score=score)
+
+
 # Vanilla single-keyframe locals for the static ped bones (identical across
 # WALK_player / run_player / bomber / woman_idlestance).
 STATIC_LOCALS = {
@@ -181,6 +259,138 @@ def index_models(rig):
     return by_name
 
 
+def _m4_mul(A, B):
+    return [[sum(A[i][k] * B[k][j] for k in range(4)) for j in range(4)]
+            for i in range(4)]
+
+
+def _m4_inv(M):
+    n = 4
+    A = [list(M[i]) + [1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
+    for c in range(n):
+        p = max(range(c, n), key=lambda r: abs(A[r][c]))
+        A[c], A[p] = A[p], A[c]
+        pv = A[c][c]
+        A[c] = [x / pv for x in A[c]]
+        for r in range(n):
+            if r != c:
+                f = A[r][c]
+                A[r] = [x - f * y for x, y in zip(A[r], A[c])]
+    return [row[n:] for row in A]
+
+
+def _pos3(M):
+    return (M[0][3], M[1][3], M[2][3])
+
+
+def _qrot(M):
+    return q_from_world([M[0][:3], M[1][:3], M[2][:3]])
+
+
+def _vang(a, b):
+    a = v_norm(a); b = v_norm(b)
+    return math.degrees(math.acos(max(-1.0, min(1.0, v_dot(a, b)))))
+
+
+def bind_consistent(m, tol=1.0):
+    """True if the bind matrix uses the same bone frame as the animation:
+    each child's offset seen in the bone's own frame must be identical in
+    the bind and in the static pose (old exports, e.g. three.js Samba, have
+    leg/arm bind frames flipped by 180 deg)."""
+    B = getattr(m, 'bind', None)
+    if B is None:
+        return False
+    S = m.world_mat(0.0, eval_curves=False)
+    qB, qS = _qrot(B), _qrot(S)
+    for c in getattr(m, 'children', []):
+        # leaf end joints (HeadTip, ToeTip...) often carry junk bind matrices
+        if getattr(c, 'bind', None) is None or not getattr(c, 'children', None):
+            continue
+        dB = v_sub(_pos3(c.bind), _pos3(B))
+        dS = v_sub(_pos3(c.world_mat(0.0, eval_curves=False)), _pos3(S))
+        if v_dot(dB, dB) < 1e-6 or v_dot(dS, dS) < 1e-6:
+            continue
+        if _vang(mat_vec(q_to_mat(q_conj(qB)), dB),
+                 mat_vec(q_to_mat(q_conj(qS)), dS)) > tol:
+            return False
+    return True
+
+
+def _mat_from(q, p):
+    R = q_to_mat(q)
+    return [list(R[0]) + [p[0]], list(R[1]) + [p[1]], list(R[2]) + [p[2]],
+            [0.0, 0.0, 0.0, 1.0]]
+
+
+def rest_world(m):
+    """Source rest (bind) world matrix: the FBX BindPose / skin-cluster
+    matrix when present (true T-pose), else the parent's bind composed with
+    the static local offset, else the static Lcl pose. Mixamo stores an
+    animation frame in Lcl (Samba: hips turned 35 deg), so the bind matters.
+    A bind whose bone frame disagrees with the animation frame is not used
+    as is: the static rotation is swung onto the bind child direction."""
+    if getattr(m, 'bind', None) is not None:
+        if bind_consistent(m):
+            return m.bind
+        S = m.world_mat(0.0, eval_curves=False)
+        q = _qrot(S)
+        pairs = []
+        for c in getattr(m, 'children', []):
+            if getattr(c, 'bind', None) is None or not getattr(c, 'children', None):
+                continue
+            dB = v_sub(_pos3(c.bind), _pos3(m.bind))
+            dS = v_sub(_pos3(c.world_mat(0.0, eval_curves=False)), _pos3(S))
+            if v_dot(dB, dB) > 1e-6 and v_dot(dS, dS) > 1e-6:
+                pairs.append((dS, dB))
+        if pairs:
+            # rigid correction static -> bind: primary = longest child,
+            # roll from the most perpendicular other child (hands: fingers)
+            pairs.sort(key=lambda p: -v_dot(p[1], p[1]))
+            dS0, dB0 = pairs[0]
+            R = min_rot(v_norm(dS0), v_norm(dB0))
+            sec = None
+            best = 0.0
+            for dS, dB in pairs[1:]:
+                sn = v_norm(v_cross(v_norm(dB0), v_norm(dB)))
+                w = math.sqrt(v_dot(sn, sn))
+                if w > best:
+                    best, sec = w, (dS, dB)
+            if sec is not None and best > 0.1:
+                R = twist_about(R, v_norm(dB0), sec[0], sec[1])
+            q = q_mul(R, q)
+        return _mat_from(q, _pos3(m.bind))
+    p = m.parent
+    while p is not None and getattr(p, 'bind', None) is None:
+        p = p.parent
+    W = m.world_mat(0.0, eval_curves=False)
+    if p is None:
+        return W
+    Wp = p.world_mat(0.0, eval_curves=False)
+    return _m4_mul(rest_world(p), _m4_mul(_m4_inv(Wp), W))
+
+
+# Folded chains: SA Spine (2) covers several source bones up to the driver
+# of SA Spine1 (3). Its per-frame direction is aimed at that source joint
+# (the chord of the folded chain) so bends inside the fold are not lost;
+# the twist still comes from the source bone.
+FOLD_AIM = {2: 3}
+
+
+def fold_fix(V, bid, t, skin_T, by_name, src_of, a_q):
+    """Swing V so the CJ segment bid->FOLD_AIM[bid] points at the source."""
+    c = FOLD_AIM.get(bid)
+    if c is None or c not in src_of or bid not in src_of:
+        return V
+    u = v_sub(skin_T[c], skin_T[bid])
+    Wb = by_name[src_of[bid]].world_mat(t)
+    Wc = by_name[src_of[c]].world_mat(t)
+    d = mat_vec(q_to_mat(a_q), v_sub(_pos3(Wc), _pos3(Wb)))
+    if v_dot(u, u) < 1e-6 or v_dot(d, d) < 1e-6:
+        return V
+    cur = v_norm(mat_vec(q_to_mat(V), u))
+    return q_norm(q_mul(min_rot(cur, v_norm(d)), V))
+
+
 def twist_about(q, axis, u2, v2):
     """Rotate q about `axis` so the secondary pair (u2 -> v2) best fits."""
     axis = v_norm(axis)
@@ -222,7 +432,7 @@ def build_matchers(sk, skin_q, skin_T, by_name, src_of, bone_map, a_q):
                 need.add(ac)
     src_rest = {}
     for nm in need:
-        W = by_name[nm].world_mat(0.0, eval_curves=False)
+        W = rest_world(by_name[nm])
         src_rest[nm] = (q_from_world([W[0][:3], W[1][:3], W[2][:3]]),
                         (W[0][3], W[1][3], W[2][3]))
 
@@ -270,9 +480,11 @@ def build_matchers(sk, skin_q, skin_T, by_name, src_of, bone_map, a_q):
             u = (v_sub(skin_T[bid], skin_T[par_cj])
                  if par_cj != -1 and bid in skin_T and par_cj in skin_T
                  else mat_vec(q_to_mat(skin_q[bid]), (1.0, 0.0, 0.0)))
-            v = (to_game(v_sub(p_rest, src_rest[par_src.name][1]))
-                 if par_src is not None and par_src.name in src_rest
-                 else mat_vec(q_to_mat(q_rest), (1.0, 0.0, 0.0)))
+            if par_src is not None:
+                Wp = rest_world(par_src)
+                v = to_game(v_sub(p_rest, (Wp[0][3], Wp[1][3], Wp[2][3])))
+            else:
+                v = mat_vec(q_to_mat(q_rest), (1.0, 0.0, 0.0))
             primary = seg(u, v)
         if primary is None:
             primary = (v_norm(mat_vec(q_to_mat(skin_q[bid]), (1.0, 0.0, 0.0))),
@@ -309,7 +521,6 @@ def convert(fbx_path=FBX, skel_path=SKEL, skin_path=SKIN, out_path=OUT,
     skel/skin: optional pre-loaded dicts (from dff_skel/dff_skin) to avoid
     re-parsing the DFF. progress: callable(str) for status lines.
     """
-    bone_map = bone_map or BONE_MAP
     log = progress or (lambda s: None)
 
     if skel is None:
@@ -327,7 +538,13 @@ def convert(fbx_path=FBX, skel_path=SKEL, skin_path=SKIN, out_path=OUT,
 
     log('...reading FBX')
     rig = load_rig(fbx_path)
-    by_name = index_models(rig)
+    rr = resolve_rig(rig, bone_map)
+    by_name = rr['by_name']
+    bone_map = rr['bone_map']
+    log('rig: %s' % rr['label'])
+    if rr['missing']:
+        raise ValueError('FBX bones not found (%s rig): %s' %
+                         (rr['label'], ', '.join(rr['missing'])))
 
     tmax = 0.0
     for c in rig['curves'].values():
@@ -370,14 +587,17 @@ def convert(fbx_path=FBX, skel_path=SKEL, skin_path=SKIN, out_path=OUT,
         raise ValueError('root motion too large for IFP translation '
                          '(max %.1f units > 32)' % max_T)
 
-    # skin.json q = skinToBone = conj(frameWorld_bind); the game composes
-    # frameWorld_anim, so the visual V must be carried by frameWorld_bind:
-    #   frameWorld_anim = V * frameWorld_bind = V * conj(skinToBone)
     # skin q = bind WORLD rotation W (inverse of skinToBone); the mesh moves
     # by fw*skinToBone = fw*conj(W), so the visual V = fw*conj(W) -> fw = V*W
-    fws = {bid: [q_mul(q_mul(delta[bid][k], M[bid]), skin_q[bid])
-                 for k in range(nsamples)]
-           for bid in src_of}
+    fws = {}
+    for bid in src_of:
+        seq = []
+        for k in range(nsamples):
+            V = q_mul(delta[bid][k], M[bid])
+            if bid in FOLD_AIM:
+                V = fold_fix(V, bid, times[k], skin_T, by_name, src_of, a_q)
+            seq.append(q_mul(V, skin_q[bid]))
+        fws[bid] = seq
 
     # hierarchy walk -> locals
     order = []
@@ -448,6 +668,7 @@ def convert(fbx_path=FBX, skel_path=SKEL, skin_path=SKIN, out_path=OUT,
     inu_ifp.write_anp3(out_path, ifp)
     stats = {
         'out': out_path,
+        'rig': rr['label'],
         'bytes': os.path.getsize(out_path),
         'tracks': len(anim.bones),
         'samples': nsamples,

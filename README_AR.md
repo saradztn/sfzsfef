@@ -73,9 +73,27 @@ end
 
 **سطر الأوامر:** `python tools/fbx2ifp_gui.py --cli player.dff anim.fbx out.ifp clip`
 
-> ملاحظة: خريطة العظام مبنية على تسمية هيكل هذا الـ FBX
-> (Root / Hips / Spine1..4 / LeftThigh / LeftShin / LeftFinger2Proximal …).
-> إن كان FBX آخر بأسماء مختلفة ستعرض الأداة قائمة العظام الناقصة بدل إنتاج ملف خاطئ.
+### الهياكل المدعومة (تُكتشف تلقائياً)
+
+| الهيكل | مثال | ملاحظات |
+|---|---|---|
+| **Mixamo** | `mixamorig:Hips`, `LeftUpLeg`, `LeftHandIndex1` … | الأصابع اختيارية (إن لم توجد تبقى على وضعية الـ DFF) |
+| **Newton / Rokoko** | `Root`, `Hips`, `Spine1..4`, `LeftThigh` … | الهيكل الأصلي لهذا المشروع |
+
+- تُقرأ **وضعية الـ T-pose الحقيقية** من الـ FBX (BindPose / Skin clusters)،
+  لأن Mixamo يخزّن لقطة من الحركة كوضعية ثابتة (في Samba الوركان مُدارتان 35°).
+- ملفات Mixamo القديمة التي فيها bind غير متسق مع الحركة تُكتشف وتُصحَّح تلقائياً.
+- إن كان الـ FBX بأسماء أخرى تعرض الأداة قائمة العظام الناقصة بدل إنتاج ملف خاطئ.
+
+### نتائج الاختبار (فحص تلقائي بـ FK اللعبة نفسها)
+
+| FBX | DFF | أقصى خطأ اتجاه | الالتفاف | النتيجة |
+|---|---|---|---|---|
+| الملف الأصلي (Newton) | player.dff | 0.23° | 0.06° | ✅ PASS |
+| Mixamo (three.js) | player.dff | 0.07° | 0.08° | ✅ PASS |
+| Mixamo Samba (تصدير قديم) | player.dff | 0.08° | 0.15° | ✅ PASS |
+| Mixamo | Shrek.dff | 0.07° | 0.08° | ✅ PASS |
+| Mixamo بدون أصابع | player.dff | 0.07° | 0.08° | ✅ PASS |
 
 ## الأدوات (داخل المستودع)
 

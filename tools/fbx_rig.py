@@ -108,6 +108,7 @@ class RigModel:
         self.cls = cls
         self.parent = None
         self.children = []
+        self.bind = None       # world bind matrix (BindPose / Cluster), rows
         self.lclT = (0.0, 0.0, 0.0)
         self.lclR = (0.0, 0.0, 0.0)
         self.lclS = (1.0, 1.0, 1.0)
@@ -295,6 +296,41 @@ def load_rig(path):
         if n.name == 'GlobalSettings':
             gs = props70(n)
             break
+
+    # true bind pose (T-pose): BindPose PoseNode matrices, else skin-cluster
+    # TransformLink. FBX stores 16 doubles row-vector style (axes in rows,
+    # translation in 12..14) -> transpose to column-vector rows.
+    def _mat(vals):
+        v = list(vals)
+        return [[v[0], v[4], v[8], v[12]], [v[1], v[5], v[9], v[13]],
+                [v[2], v[6], v[10], v[14]], [0.0, 0.0, 0.0, 1.0]]
+    bind = {}
+    for n in nodes:
+        if n.name == 'Pose' and len(n.props) > 2 and dec(n.props[2]) == 'BindPose':
+            for pn in n.children:
+                if pn.name != 'PoseNode':
+                    continue
+                nid = mat = None
+                for c in pn.children:
+                    if c.name == 'Node' and c.props:
+                        nid = c.props[0]
+                    elif c.name == 'Matrix' and c.props and len(c.props[0]) == 16:
+                        mat = c.props[0]
+                if nid in models and mat is not None:
+                    bind.setdefault(nid, _mat(mat))
+    cluster_link = {}
+    for n in nodes:
+        if n.name == 'Deformer' and len(n.props) > 2 and dec(n.props[2]) == 'Cluster':
+            tl = [c for c in n.children if c.name == 'TransformLink' and c.props]
+            if tl and len(tl[0].props[0]) == 16:
+                cluster_link[n.props[0]] = _mat(tl[0].props[0])
+    for child, par in conns_oo:
+        if child in cluster_link and par in models:
+            bind.setdefault(par, cluster_link[child])
+        elif par in cluster_link and child in models:
+            bind.setdefault(child, cluster_link[par])
+    for mid, M in bind.items():
+        models[mid].bind = M
 
     return {
         'models': models, 'curve_nodes': curve_nodes, 'curves': curves,

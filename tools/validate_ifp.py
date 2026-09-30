@@ -98,12 +98,15 @@ def validate(ifp_path, fbx_path, sk=None, skin=None, log=None,
     skin_q = {b: tuple(v['q']) for b, v in skin.items()}
     skin_T = {b: tuple(v['T']) for b, v in skin.items()}
     rig = load_rig(fbx_path)
-    by_name = conv.index_models(rig)
+    rr = conv.resolve_rig(rig)
+    by_name = rr['by_name']
+    bone_map = rr['bone_map']
+    log('rig: %s' % rr['label'])
     a_q = conv.q_from_mat(conv.A_ROWS_YUP if str(up_axis).upper() == 'Y'
                           else conv.A_ROWS_ZUP)
-    src_of = conv.build_src_of(conv.BONE_MAP)
+    src_of = conv.build_src_of(bone_map)
     M, src_rest = conv.build_matchers(sk, skin_q, skin_T, by_name,
-                                      src_of, conv.BONE_MAP, a_q)
+                                      src_of, bone_map, a_q)
 
     tmax = max(c.times[-1] for c in rig['curves'].values() if c.times)
     nsamples = int(round(tmax * conv.FPS)) + 1
@@ -114,7 +117,10 @@ def validate(ifp_path, fbx_path, sk=None, skin=None, log=None,
         W = by_name[nm].world_mat(times[k])
         q_t = conv.q_from_world([W[0][:3], W[1][:3], W[2][:3]])
         dq = conv.make_conj_a(a_q)(q_mul(q_t, q_conj(src_rest[nm][0])))
-        return q_mul(dq, M[bid])
+        V = q_mul(dq, M[bid])
+        if bid in conv.FOLD_AIM:
+            V = conv.fold_fix(V, bid, times[k], skin_T, by_name, src_of, a_q)
+        return V
 
     def src_world_q(nm, t):
         W = by_name[nm].world_mat(t)
@@ -139,7 +145,7 @@ def validate(ifp_path, fbx_path, sk=None, skin=None, log=None,
     # valid pairs: mapped parent with mapped child (segment = joint->child)
     seg_pairs = []
     for bid in src_of:
-        kids = conv.mapped_kids(bid, sk, src_of, conv.BONE_MAP)
+        kids = conv.mapped_kids(bid, sk, src_of, bone_map)
         if kids and bid != 0:      # root link: CJ root at pelvis, FBX root on floor
             seg_pairs.append((bid, kids[0]))
     # skip degenerate CJ links (Pelvis->Spine is ~1 mm in player.dff: its
@@ -175,7 +181,7 @@ def validate(ifp_path, fbx_path, sk=None, skin=None, log=None,
         if bid in conv.PRIMARY_PAIRS:
             x, y = conv.PRIMARY_PAIRS[bid]
         else:
-            kids = conv.mapped_kids(bid, sk, src_of, conv.BONE_MAP)
+            kids = conv.mapped_kids(bid, sk, src_of, bone_map)
             if kids:
                 x, y = bid, kids[0]
             else:
@@ -283,7 +289,7 @@ def validate(ifp_path, fbx_path, sk=None, skin=None, log=None,
     log('roll/twist check (left-right axes): max %.4f deg  [%s]' % (max_roll,
         ', '.join('%s %.2f' % (src_of[b], e) for b, e in sorted(roll_worst.items()))))
     log('pelvis hip-width direction: max %.4f deg' % max_hip_err)
-    log('folded spine (Spine1..Spine4 -> CJ Spine): max %.4f deg (info)' % max_fold_err)
+    log('folded spine chord (aimed): max %.4f deg' % max_fold_err)
 
     log('')
     log('== E. root translation ==')
@@ -293,7 +299,7 @@ def validate(ifp_path, fbx_path, sk=None, skin=None, log=None,
     log('max |T| %.3f, max step %.4f' % (mx, step))
 
     passed = (max_vis_err < 0.5 and max_seg_err < 0.5 and max_roll < 1.0
-              and max_hip_err < 1.0 and max_fold_err < 5.0
+              and max_hip_err < 1.0 and max_fold_err < 0.5
               and ok and step < 0.2)
     log('')
     log('RESULT: ' + ('PASS' if passed else 'FAIL'))

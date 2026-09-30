@@ -30,16 +30,12 @@ APP_TITLE = 'FBX -> IFP  |  GTA SA / MTA:SA'
 # --------------------------------------------------------------------------
 # GUI-independent logic (tested headless)
 # --------------------------------------------------------------------------
-def required_fbx_bones(bone_map=None):
-    bone_map = bone_map or conv.BONE_MAP
-    need = set(bone_map)
-    return sorted(need)
 
 
 def check_dff(path):
     """-> (sk, skin, info, summary_text)"""
     sk, skin, info = load_dff(path)
-    need_ids = sorted({v[0] for v in conv.BONE_MAP.values()})
+    need_ids = sorted({v[0] for v in conv.BONE_MAP.values()} - conv.OPTIONAL_IDS)
     missing = [b for b in need_ids if b not in skin or b not in sk]
     if missing:
         raise ValueError('DFF is missing SA bone ids: %s' % missing)
@@ -56,17 +52,23 @@ def check_fbx(path):
                          '(Blender: FBX export is binary by default; Maya/Max: '
                          'set File type = Binary).')
     rig = load_rig(path)
-    by_name = conv.index_models(rig)
-    missing = [n for n in required_fbx_bones() if n not in by_name]
+    rr = conv.resolve_rig(rig)
+    missing = rr['missing']
+    n_mapped = len({v[0] for v in rr['bone_map'].values()})
     tmax = 0.0
     for c in rig['curves'].values():
         if c.times:
             tmax = max(tmax, c.times[-1])
-    txt = '%d nodes, clip %.2f s' % (len(rig['models']), tmax)
+    txt = '%s rig, clip %.2f s' % (rr['label'], tmax)
     if missing:
         txt += ' - MISSING %d bones' % len(missing)
     else:
-        txt += ', all %d mapped bones found' % len(required_fbx_bones())
+        txt += ', %d/26 SA bones driven' % n_mapped
+        opt = sorted(conv.OPTIONAL_IDS - {v[0] for v in rr['bone_map'].values()})
+        if opt:
+            txt += ' (no fingers/toes in FBX: kept in bind pose)'
+    if not any(getattr(m, 'bind', None) is not None for m in rig['models'].values()):
+        txt += ' [no bind pose in FBX: using its static pose]'
     return rig, txt, missing, tmax
 
 
@@ -333,7 +335,7 @@ def run_gui():
                     if missing:
                         messagebox.showwarning(
                             APP_TITLE, 'These bones were not found in the FBX:\n\n' +
-                            ', '.join(missing) + '\n\nThe FBX rig must use the same bone names.')
+                            ', '.join(missing) + '\n\nSupported rigs: Mixamo, Newton/Rokoko (same bone names).')
                 elif kind == 'fbx_err':
                     v_fbx_st.set('ERROR: ' + a[0])
                     messagebox.showerror(APP_TITLE, 'FBX: ' + a[0])
