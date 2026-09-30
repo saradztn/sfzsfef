@@ -147,8 +147,69 @@ def resolve_rig(rig, bone_map=None):
     for nm, (bid, sa, aim) in bm.items():
         if nm in by_name:
             pruned[nm] = (bid, sa, aim if aim in by_name else None)
-    return dict(label=label, bone_map=pruned, by_name=by_name,
-                missing=missing, score=score)
+    out = dict(label=label, bone_map=pruned, by_name=by_name,
+               missing=missing, score=score, rest_src='bind')
+    if not any(getattr(m, 'bind', None) is not None
+               for m in rig['models'].values()):
+        out['rest_src'] = synth_bind(rig, pruned, by_name)
+    return out
+
+
+def synth_bind(rig, bone_map, by_name):
+    """FBX without BindPose/clusters (Mixamo 'Without Skin'): the static
+    Lcl pose is just an animation frame. In Maya/Mixamo rigs the T-pose is
+    carried by the joint pre-rotations, i.e. it is the pose with every Lcl
+    Rotation = 0 (verified: equals the real bind of mixamo.fbx to 0.00 deg).
+    Build that pose and use it as bind when it really is a T-pose; returns
+    'zero-rotation T-pose' or 'static pose'."""
+    if rig.get('_synth_bind'):
+        return rig['_synth_bind']
+    mapped = [by_name[n] for n in bone_map
+              if not isinstance(by_name[n], StaticNode)]
+    ids = set(id(m) for m in mapped)
+    tops = [m for m in mapped if m.parent is None or id(m.parent) not in ids]
+    skel = []
+    stack = list(tops)
+    while stack:
+        m = stack.pop()
+        skel.append(m)
+        stack.extend(getattr(m, 'children', []))
+    saved = [(m, m.lclR) for m in skel]
+    try:
+        for m in skel:
+            m.lclR = (0.0, 0.0, 0.0)
+        W = dict((id(m), m.world_mat(0.0, eval_curves=False)) for m in skel)
+    finally:
+        for m, r in saved:
+            m.lclR = r
+    name_of = {}
+    for nm, (bid, _sa, _aim) in bone_map.items():
+        name_of.setdefault(bid, nm)
+
+    def seg(a, b):
+        if a not in name_of or b not in name_of:
+            return None
+        ma, mb = by_name[name_of[a]], by_name[name_of[b]]
+        if id(ma) not in W or id(mb) not in W:
+            return None
+        d = v_sub(_pos3(W[id(mb)]), _pos3(W[id(ma)]))
+        return v_norm(d) if v_dot(d, d) > 1e-8 else None
+
+    la, ra = seg(32, 33), seg(22, 23)
+    ll, rl = seg(41, 42), seg(51, 52)
+    up = seg(1, 4)
+    ok = None not in (la, ra, ll, rl, up)
+    if ok:
+        ok = (v_dot(la, ra) < -0.95 and abs(v_dot(la, up)) < 0.2
+              and abs(v_dot(ra, up)) < 0.2
+              and v_dot(ll, up) < -0.95 and v_dot(rl, up) < -0.95)
+    res = 'static pose'
+    if ok:
+        for m in skel:
+            m.bind = W[id(m)]
+        res = 'zero-rotation T-pose'
+    rig['_synth_bind'] = res
+    return res
 
 
 # Vanilla single-keyframe locals for the static ped bones (identical across

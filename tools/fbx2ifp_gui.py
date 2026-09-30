@@ -67,7 +67,9 @@ def check_fbx(path):
         opt = sorted(conv.OPTIONAL_IDS - {v[0] for v in rr['bone_map'].values()})
         if opt:
             txt += ' (no fingers/toes in FBX: kept in bind pose)'
-    if not any(getattr(m, 'bind', None) is not None for m in rig['models'].values()):
+    if rr.get('rest_src') == 'zero-rotation T-pose':
+        txt += ' [no bind pose in FBX: T-pose rebuilt from joint orients]'
+    elif rr.get('rest_src') == 'static pose':
         txt += ' [no bind pose in FBX: using its static pose]'
     return rig, txt, missing, tmax
 
