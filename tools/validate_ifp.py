@@ -64,37 +64,43 @@ def vang(u, v):
     return math.degrees(math.acos(c))
 
 
-def main():
+def validate(ifp_path, fbx_path, sk=None, skin=None, log=None,
+             up_axis='Y', stride=3):
+    """Run all checks; returns a dict with 'passed' + the error metrics.
+    log: callable(*args) for report lines (default print)."""
+    if log is None:
+        log = print
+    _log = log
+    log = lambda *a: _log(' '.join(str(x) for x in a))
     import json
-    ifp_path = sys.argv[1] if len(sys.argv) > 1 else conv.OUT
-    fbx_path = sys.argv[2] if len(sys.argv) > 2 else conv.FBX
 
-    print('== A. structure ==')
+    log('== A. structure ==')
     f = read_anp3_raw(ifp_path)
-    print('file %s: %d bytes, pkg=%r, anims=%d' %
+    log('file %s: %d bytes, pkg=%r, anims=%d' %
           (ifp_path, f['total'], f['name'], len(f['anims'])))
     a = f['anims'][0]
-    print('anim %r: %d tracks, flags=%d, dsize=%d' %
+    log('anim %r: %d tracks, flags=%d, dsize=%d' %
           (a['name'], len(a['tracks']), a['flags'], a['dsize']))
     t4 = [t for t in a['tracks'] if t['type'] == 4]
-    print('type-4 tracks:', [(t['name'], t['id'], len(t['kfs'])) for t in t4])
+    log('type-4 tracks:', [(t['name'], t['id'], len(t['kfs'])) for t in t4])
     ok = True
     for t in a['tracks']:
         ts = [kf['t'] for kf in t['kfs']]
         if any(ts[i] >= ts[i + 1] for i in range(len(ts) - 1)):
-            print('!! non-monotonic time in', t['name']); ok = False
-    print('time monotonic + unit quats:', 'OK' if ok else 'FAIL')
+            log('!! non-monotonic time in', t['name']); ok = False
+    log('time monotonic + unit quats:', 'OK' if ok else 'FAIL')
 
     # ---- shared model data ----
-    sk = load_skel(conv.SKEL)
-    skin = {int(k): v for k, v in json.load(open(conv.SKIN)).items()}
+    if sk is None:
+        sk = load_skel(conv.SKEL)
+    if skin is None:
+        skin = {int(k): v for k, v in json.load(open(conv.SKIN)).items()}
     skin_q = {b: tuple(v['q']) for b, v in skin.items()}
     skin_T = {b: tuple(v['T']) for b, v in skin.items()}
     rig = load_rig(fbx_path)
-    by_name = {}
-    for m in rig['models'].values():
-        by_name.setdefault(m.name, m)
-    a_q = conv.q_from_mat(conv.A_ROWS_YUP)
+    by_name = conv.index_models(rig)
+    a_q = conv.q_from_mat(conv.A_ROWS_YUP if str(up_axis).upper() == 'Y'
+                          else conv.A_ROWS_ZUP)
     src_of = conv.build_src_of(conv.BONE_MAP)
     M, src_rest = conv.build_matchers(sk, skin_q, skin_T, by_name,
                                       src_of, conv.BONE_MAP, a_q)
@@ -118,27 +124,24 @@ def main():
     bind_pos = {b: tuple(skin_T[b]) for b in sk if b in skin_T}
 
     def fk_pos(fw):
-        """Achieved joint positions through the HAnim bind offsets, rotated
-        by each parent bone's visual V (posed offset = V * bind offset)."""
+        """Joint positions exactly as the game computes them: IFP local
+        rotations composed with the DFF frame local offsets."""
         pos = {}
         for b in order:
             p = sk[b]['parent']
             if p == -1:
                 pos[b] = (0.0, 0.0, 0.0)
                 continue
-            owner = p
-            Vp = q_mul(fw[owner], skin_q[owner])      # fw = V*conj(skinToBone)
-            off = tuple(bind_pos.get(b, (0, 0, 0))[i] - bind_pos.get(p, (0, 0, 0))[i]
-                        for i in range(3))
-            rot = mat_vec(q_to_mat(Vp), off)
+            rot = mat_vec(q_to_mat(fw[p]), sk[b]['T'])
             pos[b] = tuple(pos[p][i] + rot[i] for i in range(3))
         return pos
 
     # valid pairs: mapped parent with mapped child (segment = joint->child)
-    seg_pairs = [(bid, [c for c in sk if sk[c]['parent'] == bid][0])
-                 for bid in src_of
-                 if [c for c in sk if sk[c]['parent'] == bid]
-                 and [c for c in sk if sk[c]['parent'] == bid][0] in src_of]
+    seg_pairs = []
+    for bid in src_of:
+        kids = conv.mapped_kids(bid, sk, src_of, conv.BONE_MAP)
+        if kids and bid != 0:      # root link: CJ root at pelvis, FBX root on floor
+            seg_pairs.append((bid, kids[0]))
     # skip degenerate CJ links (Pelvis->Spine is ~1 mm in player.dff: its
     # direction is meaningless). The pelvis is checked by hip width instead.
     def _blen(b, c):
@@ -148,6 +151,39 @@ def main():
     # Spine->Spine1 spans 3 folded source bones (Spine1..Spine4): bends inside
     # the fold cannot be represented by one CJ bone -> reported separately.
     FOLDED = {(2, 3)}
+    # the DFF's own frame offsets vs its skin bind can disagree slightly
+    # (player.dff: L Finger01 2.71 deg, L Finger 0.34 deg) - model data, not
+    # conversion error; measured here and reported separately
+    from rt import skel_world
+    _wb = skel_world(sk)
+    intrinsic = {}
+    for b, c in seg_pairs:
+        chain = [c]
+        while sk[chain[-1]]['parent'] not in (b, -1):
+            chain.append(sk[chain[-1]]['parent'])
+        intrinsic[(b, c)] = vang(conv.v_sub(skin_T[c], skin_T[b]),
+                                 conv.v_sub(_wb[c][1], _wb[b][1]))
+    roll_prim, roll_lat = {}, {}
+    for bid, (ca, cb, sa, sb) in conv.ROLL_PAIRS.items():
+        if bid not in src_of or sa not in src_of or sb not in src_of:
+            continue
+        _d = conv.v_sub(skin_T[ca], skin_T[cb])
+        if conv.v_dot(_d, _d) < 1e-4:       # degenerate width: matcher skips it too
+            continue
+        g = lambda d: mat_vec(q_to_mat(a_q), d)
+        roll_lat[bid] = g(conv.v_sub(src_rest[src_of[sa]][1], src_rest[src_of[sb]][1]))
+        if bid in conv.PRIMARY_PAIRS:
+            x, y = conv.PRIMARY_PAIRS[bid]
+        else:
+            kids = conv.mapped_kids(bid, sk, src_of, conv.BONE_MAP)
+            if kids:
+                x, y = bid, kids[0]
+            else:
+                x, y = sk[bid]['parent'], bid
+        roll_prim[bid] = (conv.v_sub(skin_T[y], skin_T[x]),
+                          g(conv.v_sub(src_rest[src_of[y]][1], src_rest[src_of[x]][1])))
+    max_roll = 0.0
+    roll_worst = {}
     max_fold_err = 0.0
     max_hip_err = 0.0
 
@@ -161,14 +197,13 @@ def main():
             if sk[c]['parent'] == b:
                 stack.append(c)
 
-    print()
-    print('== B/C/D. game pose from file vs source ==')
+    log('')
+    log('== B/C/D. game pose from file vs source ==')
     max_vis_err = sum_vis_err = 0.0
     max_seg_err = 0.0
-    max_head_roll = 0.0
     seg_worst = {}
     n_vis = 0
-    for k in range(0, nsamples, 3):
+    for k in range(0, nsamples, stride):
         local_q = {}
         for bid, tr in tracks.items():
             local_q[bid] = tr['kfs'][0]['q'] if len(tr['kfs']) == 1 else tr['kfs'][k]['q']
@@ -179,7 +214,7 @@ def main():
             fw[b] = q if p == -1 else q_mul(fw[p], q)
         pos = fk_pos(fw)
         for bid in src_of:
-            V = q_mul(fw[bid], skin_q[bid])
+            V = q_mul(fw[bid], q_conj(skin_q[bid]))
             err = ang(V, intended_V(bid, k))
             max_vis_err = max(max_vis_err, err)
             sum_vis_err += err
@@ -199,52 +234,84 @@ def main():
                 if (bid, cid) in FOLDED:
                     max_fold_err = max(max_fold_err, e)
                     continue
-                max_seg_err = max(max_seg_err, e)
+                max_seg_err = max(max_seg_err, max(0.0, e - intrinsic.get((bid, cid), 0.0)))
                 seg_worst[(bid, cid)] = max(seg_worst.get((bid, cid), 0.0), e)
         # pelvis orientation: hip width (L Thigh - R Thigh) rotated by V(pelvis)
         if 1 in src_of and 41 in src_of and 51 in src_of:
-            V1 = q_mul(fw[1], skin_q[1])
+            V1 = q_mul(fw[1], q_conj(skin_q[1]))
             h_ach = mat_vec(q_to_mat(V1), conv.v_sub(skin_T[41], skin_T[51]))
             Wl = by_name[src_of[41]].world_mat(times[k])
             Wr = by_name[src_of[51]].world_mat(times[k])
             h_src = mat_vec(q_to_mat(a_q), conv.v_sub((Wl[0][3], Wl[1][3], Wl[2][3]),
                                                        (Wr[0][3], Wr[1][3], Wr[2][3])))
             max_hip_err = max(max_hip_err, vang(h_ach, h_src))
-        # head-roll regression check (Neck->Head pair, convention-clean)
-        if 5 in src_of and 4 in src_of:
-            V5 = q_mul(fw[5], skin_q[5])
-            V4 = q_mul(fw[4], skin_q[4])
-            rel_ach = q_mul(q_conj(V4), V5)
-            W5 = by_name[src_of[5]].world_mat(times[k])
-            W4 = by_name[src_of[4]].world_mat(times[k])
-            q5 = conv.q_from_world([W5[0][:3], W5[1][:3], W5[2][:3]])
-            q4 = conv.q_from_world([W4[0][:3], W4[1][:3], W4[2][:3]])
-            rel_src = q_mul(a_q, q_mul(q_mul(q_conj(q4), q5), q_conj(a_q)))
-            max_head_roll = max(max_head_roll, ang(rel_ach, rel_src))
+        # roll (twist) check: each bone's left-right axis from the file vs
+        # the source bone's motion applied to its rest left-right axis,
+        # both projected perpendicular to the bone's primary axis
+        for bid, (ca, cb, sa, sb) in conv.ROLL_PAIRS.items():
+            if bid not in src_of or ca not in skin_T or cb not in skin_T:
+                continue
+            prim = roll_prim.get(bid)
+            if prim is None:
+                continue
+            V = q_mul(fw[bid], q_conj(skin_q[bid]))
+            nm = src_of[bid]
+            W = by_name[nm].world_mat(times[k])
+            q_t = conv.q_from_world([W[0][:3], W[1][:3], W[2][:3]])
+            dq = conv.make_conj_a(a_q)(q_mul(q_t, q_conj(src_rest[nm][0])))
+            axis = mat_vec(q_to_mat(dq), prim[1])
+            a_v = mat_vec(q_to_mat(V), conv.v_sub(skin_T[ca], skin_T[cb]))
+            b_v = mat_vec(q_to_mat(dq), roll_lat[bid])
+            def _pj(w):
+                d = conv.v_dot(w, conv.v_norm(axis)); n = conv.v_norm(axis)
+                return tuple(w[i] - n[i] * d for i in range(3))
+            e = vang(_pj(a_v), _pj(b_v))
+            max_roll = max(max_roll, e)
+            roll_worst[bid] = max(roll_worst.get(bid, 0.0), e)
 
-    print('visual error vs intended: max %.4f deg, mean %.4f deg' %
+    log('visual error vs intended: max %.4f deg, mean %.4f deg' %
           (max_vis_err, sum_vis_err / max(n_vis, 1)))
-    print('joint segment directions vs source (FK positions): max %.4f deg'
-          % max_seg_err)
+    log('joint segment directions vs source (game FK): max %.4f deg '
+        '(net of the DFF\'s own frame/skin difference)' % max_seg_err)
+    big = [(src_of[b], src_of[c], e) for (b, c), e in intrinsic.items() if e > 0.1]
+    if big:
+        log('  DFF frame-vs-skin difference (model data): ' +
+            ', '.join('%s->%s %.2f' % x for x in big))
     worst5 = sorted(seg_worst.items(), key=lambda kv: -kv[1])[:5]
-    print('worst segments:', ', '.join('%s->%s %.2f' %
+    log('worst segments:', ', '.join('%s->%s %.2f' %
           (src_of[b], src_of[c], e) for (b, c), e in worst5))
-    print('head-roll check (Neck->Head rel): max %.4f deg' % max_head_roll)
-    print('pelvis hip-width direction: max %.4f deg' % max_hip_err)
-    print('folded spine (Spine1..Spine4 -> CJ Spine): max %.4f deg (info)' % max_fold_err)
+    log('roll/twist check (left-right axes): max %.4f deg  [%s]' % (max_roll,
+        ', '.join('%s %.2f' % (src_of[b], e) for b, e in sorted(roll_worst.items()))))
+    log('pelvis hip-width direction: max %.4f deg' % max_hip_err)
+    log('folded spine (Spine1..Spine4 -> CJ Spine): max %.4f deg (info)' % max_fold_err)
 
-    print()
-    print('== E. root translation ==')
+    log('')
+    log('== E. root translation ==')
     root = t4[0]['kfs']
     mx = max(math.sqrt(sum(c * c for c in kf['p'])) for kf in root)
     step = max(math.dist(root[i]['p'], root[i + 1]['p']) for i in range(len(root) - 1))
-    print('max |T| %.3f, max step %.4f' % (mx, step))
+    log('max |T| %.3f, max step %.4f' % (mx, step))
 
-    passed = (max_vis_err < 0.5 and max_seg_err < 0.5 and max_head_roll < 1.0
+    passed = (max_vis_err < 0.5 and max_seg_err < 0.5 and max_roll < 1.0
               and max_hip_err < 1.0 and max_fold_err < 5.0
               and ok and step < 0.2)
-    print()
-    print('RESULT:', 'PASS' if passed else 'FAIL')
+    log('')
+    log('RESULT: ' + ('PASS' if passed else 'FAIL'))
+    return dict(passed=passed, visual=max_vis_err, segments=max_seg_err,
+                roll=max_roll, hip=max_hip_err, fold=max_fold_err,
+                root_step=step, structure_ok=ok)
+
+
+
+def main():
+    ifp_path = sys.argv[1] if len(sys.argv) > 1 else conv.OUT
+    fbx_path = sys.argv[2] if len(sys.argv) > 2 else conv.FBX
+    sk = skin = None
+    if len(sys.argv) > 3:
+        from dff_rig import load_dff
+        sk, skin, _ = load_dff(sys.argv[3])
+    r = validate(ifp_path, fbx_path, sk, skin)
+    sys.exit(0 if r['passed'] else 1)
 
 
 if __name__ == '__main__':

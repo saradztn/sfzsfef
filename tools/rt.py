@@ -67,7 +67,10 @@ def mat_norm_rows(A):
 
 # ---- skeleton from player.dff json ----
 def load_skel(path):
-    frames = json.load(open(path))
+    return skel_from_frames(json.load(open(path)))
+
+
+def skel_from_frames(frames):
     sk = {}
     for f in frames:
         if f['bone'] is None:

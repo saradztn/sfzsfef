@@ -144,7 +144,7 @@ def main():
             for nm in (a, b):
                 if nm not in pts:
                     W = by_name[nm].world_mat(t)
-                    p = mat_vec(q_to_mat(conv.A_Q), (W[0][3] * conv.SCALE,
+                    p = mat_vec(q_to_mat(conv.q_from_mat(conv.A_ROWS_YUP)), (W[0][3] * conv.SCALE,
                                                      W[1][3] * conv.SCALE,
                                                      W[2][3] * conv.SCALE))
                     # relative to hips at t=0
@@ -153,7 +153,7 @@ def main():
 
     # hips reference for centering the source
     W = by_name['Hips'].world_mat(0.0)
-    hips0 = mat_vec(q_to_mat(conv.A_Q), (W[0][3] * conv.SCALE,
+    hips0 = mat_vec(q_to_mat(conv.q_from_mat(conv.A_ROWS_YUP)), (W[0][3] * conv.SCALE,
                                          W[1][3] * conv.SCALE,
                                          W[2][3] * conv.SCALE))
 

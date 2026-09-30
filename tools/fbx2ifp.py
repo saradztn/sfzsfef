@@ -144,8 +144,41 @@ def build_src_of(bone_map):
     return src_of
 
 
-# explicit roll references: pelvis roll from the hip width (L Thigh - R Thigh)
-ROLL_PAIRS = {1: (41, 51)}
+# Root and Pelvis sit (almost) at the same point in SA peds, and the FBX Root
+# lies on the floor, so their own links carry no direction. Both take the
+# spine direction (Spine -> Spine1) as primary and the hip width
+# (L Thigh - R Thigh) as roll reference.
+PRIMARY_PAIRS = {0: (2, 3), 1: (2, 3)}
+# roll references: bid -> (CJ bone a, CJ bone b, mapped bone A, mapped bone B)
+# u = T_cj(a) - T_cj(b)  vs  v = src_rest(src_of[A]) - src_rest(src_of[B]).
+# The FBX head has only HeadTip (no roll info): the CJ brow width is matched
+# to the body's left-right axis (both rigs face forward in their rest pose).
+# Symmetric left-right widths only (a single-side child such as one clavicle
+# gives an asymmetric roll: 13.5 deg L/R disagreement measured on the neck).
+ROLL_PAIRS = {0: (41, 51, 41, 51), 1: (41, 51, 41, 51), 2: (41, 51, 41, 51),
+              3: (32, 22, 32, 22), 4: (32, 22, 32, 22), 5: (6, 7, 41, 51)}
+# (clavicle joints coincide with the neck joint in player.dff -> upper arms)
+
+
+def mapped_kids(bid, sk, src_of, bone_map):
+    """Mapped children of bid; the chain continuation (the FBX aim child from
+    the bone map) first, independent of the DFF frame order."""
+    kids = [c for c in sk if sk[c]['parent'] == bid and c in src_of]
+    aim = bone_map[src_of[bid]][2] if bid in src_of else None
+    kids.sort(key=lambda c: (0 if src_of[c] == aim else 1, c))
+    return kids
+
+
+def index_models(rig):
+    """name -> model, also under the name without a namespace prefix
+    ('mixamorig:Hips' -> 'Hips', 'Armature|Hips' -> 'Hips')."""
+    by_name = {}
+    for m in rig['models'].values():
+        by_name.setdefault(m.name, m)
+    for m in rig['models'].values():
+        short = m.name.replace('|', ':').split(':')[-1]
+        by_name.setdefault(short, m)
+    return by_name
 
 
 def twist_about(q, axis, u2, v2):
@@ -199,14 +232,26 @@ def build_matchers(sk, skin_q, skin_T, by_name, src_of, bone_map, a_q):
         return None
 
     M = {}
-    for bid, nm in src_of.items():
+    order = []
+    stack = [b for b in sk if sk[b]['parent'] == -1]
+    while stack:
+        b = stack.pop(0)
+        order.append(b)
+        stack.extend(c for c in sk if sk[c]['parent'] == b)
+    for bid in [b for b in order if b in src_of]:
+        nm = src_of[bid]
         q_rest, p_rest = src_rest[nm]
         def to_game(d):
             return mat_vec(q_to_mat(a_q), d)
 
-        kids = [c for c in sk if sk[c]['parent'] == bid and c in src_of]
+        kids = mapped_kids(bid, sk, src_of, bone_map)
         primary = secondary = None
-        if kids:
+        if bid in PRIMARY_PAIRS and all(b in src_of for b in PRIMARY_PAIRS[bid]):
+            a0, b0 = PRIMARY_PAIRS[bid]
+            primary = seg(v_sub(skin_T[b0], skin_T[a0]),
+                          to_game(v_sub(src_rest[src_of[b0]][1],
+                                        src_rest[src_of[a0]][1])))
+        if primary is None and kids:
             c = kids[0]
             primary = seg(v_sub(skin_T[c], skin_T[bid]),
                           to_game(v_sub(src_rest[src_of[c]][1], p_rest)))
@@ -232,19 +277,27 @@ def build_matchers(sk, skin_q, skin_T, by_name, src_of, bone_map, a_q):
         if primary is None:
             primary = (v_norm(mat_vec(q_to_mat(skin_q[bid]), (1.0, 0.0, 0.0))),
                        v_norm(mat_vec(q_to_mat(q_rest), (1.0, 0.0, 0.0))))
-        if bid in ROLL_PAIRS and all(b in src_of for b in ROLL_PAIRS[bid]):
-            l, r = ROLL_PAIRS[bid]
-            secondary = seg(v_sub(skin_T[l], skin_T[r]),
-                            to_game(v_sub(src_rest[src_of[l]][1],
-                                          src_rest[src_of[r]][1])))
-        elif len(kids) > 1:
-            c2 = kids[1]
-            secondary = seg(v_sub(skin_T[c2], skin_T[bid]),
-                            to_game(v_sub(src_rest[src_of[c2]][1], p_rest)))
-        qm = min_rot(primary[0], primary[1])
+        rp = ROLL_PAIRS.get(bid)
+        if (rp and rp[0] in skin_T and rp[1] in skin_T
+                and rp[2] in src_of and rp[3] in src_of):
+            secondary = seg(v_sub(skin_T[rp[0]], skin_T[rp[1]]),
+                            to_game(v_sub(src_rest[src_of[rp[2]]][1],
+                                          src_rest[src_of[rp[3]]][1])))
         if secondary is not None:
+            qm = min_rot(primary[0], primary[1])
             qm = twist_about(qm, primary[1], secondary[0], secondary[1])
-        M[bid] = qm
+        else:
+            # no roll reference: inherit the parent's correspondence and swing
+            # minimally onto the primary pair (independent of skin-space axes)
+            par = sk[bid]['parent']
+            while par != -1 and par not in M:
+                par = sk[par]['parent']
+            if par in M:
+                q0 = M[par]
+                qm = q_mul(min_rot(mat_vec(q_to_mat(q0), primary[0]), primary[1]), q0)
+            else:
+                qm = min_rot(primary[0], primary[1])
+        M[bid] = q_norm(qm)
     return M, src_rest
 
 
@@ -274,9 +327,7 @@ def convert(fbx_path=FBX, skel_path=SKEL, skin_path=SKIN, out_path=OUT,
 
     log('...reading FBX')
     rig = load_rig(fbx_path)
-    by_name = {}
-    for m in rig['models'].values():
-        by_name.setdefault(m.name, m)
+    by_name = index_models(rig)
 
     tmax = 0.0
     for c in rig['curves'].values():
@@ -322,7 +373,9 @@ def convert(fbx_path=FBX, skel_path=SKEL, skin_path=SKIN, out_path=OUT,
     # skin.json q = skinToBone = conj(frameWorld_bind); the game composes
     # frameWorld_anim, so the visual V must be carried by frameWorld_bind:
     #   frameWorld_anim = V * frameWorld_bind = V * conj(skinToBone)
-    fws = {bid: [q_mul(q_mul(delta[bid][k], M[bid]), q_conj(skin_q[bid]))
+    # skin q = bind WORLD rotation W (inverse of skinToBone); the mesh moves
+    # by fw*skinToBone = fw*conj(W), so the visual V = fw*conj(W) -> fw = V*W
+    fws = {bid: [q_mul(q_mul(delta[bid][k], M[bid]), skin_q[bid])
                  for k in range(nsamples)]
            for bid in src_of}
 
