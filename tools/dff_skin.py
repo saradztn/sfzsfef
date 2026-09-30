@@ -1,57 +1,86 @@
-"""Extract RpSkin inverse-bind matrices from player.dff.
+"""GTA SA DFF RpSkin-PLG (0x116) parser -> per-bone skin data.
 
-The RpSkin PLG (0x116) tail holds 32 bone matrices (64 B each: 3 rows of
-(x,y,z,pad) + pos(x,y,z,pad)) in HAnim hierarchy order. These are the
-"skin to bone" matrices; their inverses are the true mesh bind pose of
-each bone (frame list rotations are NOT authoritative for the mesh).
+Solved layout of the 0x116 payload (verified on player.dff):
+  u8 numBones, u8 numUsedBones, u16 flags, u8 usedBones[numUsedBones],
+  u8 indices[4*numVerts], f32 weights[4*numVerts],
+  matrix[numBones] (64 B each: 4x4 skinToBone, rotation only),
+  ~12 B pad.
+numVerts is not stored: infer as (chunk - 4 - numUsedBones - 64*numBones - pad)/20.
 
-Output: {bone_id: {R: 3x3 rows, T: xyz}} = world bind of each bone.
+Output JSON: {bone: {"q": skinToBone quat, "T": WORLD joint position}}.
+The world positions come from the HAnim hierarchy (pass the dff_skel frames).
 """
-import json
 import struct
 import sys
-
-sys.path.insert(0, '/home/user/sfzsfef/tools')
-from rt import mat_t, q_from_mat
-
-HIER = [0, 1, 2, 3, 4, 5, 8, 6, 7, 31, 32, 33, 34, 35, 36,
-        21, 22, 23, 24, 25, 26, 302, 301, 201, 41, 42, 43, 44, 51, 52, 53, 54]
-
-# Verified by orthonormality scan of the PLG tail (total err 0.015).
-MATRIX_BLOCK_START = 1379591
+from dff_skel import chunks, mat_to_quat
 
 
-def mat4_inv(m):
-    R = [m[0][:3], m[1][:3], m[2][:3]]
-    Rt = mat_t(R)
-    t = (m[0][3], m[1][3], m[2][3])
-    nt = [sum(Rt[i][k] * t[k] for k in range(3)) for i in range(3)]
-    return [Rt[0] + [-nt[0]], Rt[1] + [-nt[1]], Rt[2] + [-nt[2]], [0, 0, 0, 1]]
+def read_skin_matrices(data, a, e):
+    num_bones = data[a]
+    num_used = data[a + 1]
+    flags = struct.unpack_from('<H', data, a + 2)[0]
+    hdr = 4 + num_used
+    body = (e - a) - hdr - 64 * num_bones
+    # body = 20*numVerts + pad, pad is small (< 64)
+    num_verts = None
+    for pad in range(0, 64):
+        if (body - pad) >= 0 and (body - pad) % 20 == 0:
+            num_verts = (body - pad) // 20
+            break
+    if num_verts is None:
+        raise ValueError('cannot infer numVerts')
+    off = a + hdr + 20 * num_verts
+    if off + 64 * num_bones > e:
+        raise ValueError('matrix block overflows chunk')
+    mats = []
+    for b in range(num_bones):
+        m = list(struct.unpack_from('<16f', data, off))
+        mats.append(m)
+        off += 64
+    return dict(num_bones=num_bones, num_used=num_used, flags=flags,
+                num_verts=num_verts, matrices=mats)
 
 
-def extract(dff_path):
-    data = open(dff_path, 'rb').read()
-    out = {}
-    for i, bid in enumerate(HIER):
-        v = struct.unpack_from('<16f', data, MATRIX_BLOCK_START + i * 64)
-        rows = [list(v[0:3]), list(v[4:7]), list(v[8:11])]  # skinToBone rows
-        pos = [v[12], v[13], v[14]]
-        M = [mat_t(rows)[0] + [pos[0]], mat_t(rows)[1] + [pos[1]],
-             mat_t(rows)[2] + [pos[2]], [0, 0, 0, 1]]
-        mi = mat4_inv(M)  # bone world bind
-        R = [mi[0][:3], mi[1][:3], mi[2][:3]]
-        q = q_from_mat(R)
-        out[str(bid)] = {
-            'R': R,
-            'T': [mi[0][3], mi[1][3], mi[2][3]],
-            'q': [q[0], q[1], q[2], q[3]],
-        }
-    return out
+def extract_skin(data, frames_by_id=None):
+    root_end = len(data)
+    best = None
+    for typ, sz, s, e in chunks(data, 12, root_end):
+        for t2, s2, a2, b2 in chunks(data, s, e):
+            if t2 == 0x116:
+                try:
+                    rec = read_skin_matrices(data, a2, b2)
+                except Exception:
+                    continue
+                if best is None or rec['num_verts'] > best['num_verts']:
+                    rec['off'] = a2
+                    best = rec
+    if best is None:
+        raise ValueError('no usable 0x116 skin PLG found')
+    skin = {}
+    for b, m in enumerate(best['matrices']):
+        r = [m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]]
+        q = mat_to_quat(r)            # skinToBone rotation
+        t = (m[3], m[7], m[11])       # zero in GTA skins; world T from HAnim
+        if frames_by_id and b in frames_by_id:
+            t = tuple(frames_by_id[b]['pos'])
+        skin[b] = {'q': list(q), 'T': list(t)}
+    return skin, best
 
 
 if __name__ == '__main__':
-    src = sys.argv[1] if len(sys.argv) > 1 else '/home/user/sfzsfef/ref/player.dff'
-    dst = sys.argv[2] if len(sys.argv) > 2 else '/home/user/sfzsfef/ref/player_skin.json'
-    skins = extract(src)
-    json.dump(skins, open(dst, 'w'), indent=1)
-    print('wrote', dst, 'bones:', len(skins))
+    import json
+    dff_path = sys.argv[1]
+    out_path = sys.argv[2] if len(sys.argv) > 2 else 'player_skin.json'
+    data = open(dff_path, 'rb').read()
+    frames = None
+    skel_out = out_path.replace('skin', 'skel')
+    try:
+        sk = json.load(open(skel_out))
+        frames = {f['idx']: f for f in (sk['frames'] if isinstance(sk, dict) else sk)}
+    except Exception:
+        pass
+    skin, meta = extract_skin(data, frames)
+    with open(out_path, 'w') as f:
+        json.dump(skin, f)
+    print('wrote', out_path, 'bones=%d numVerts=%d flags=%d' %
+          (meta['num_bones'], meta['num_verts'], meta['flags']))

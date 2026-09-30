@@ -1,89 +1,165 @@
-"""DFF frame-list + HAnim extractor (RW 3.x), tolerant of size-flag quirks."""
-import struct, sys, json, math
+"""GTA SA DFF -> HAnim skeleton extractor (RW chunk walk, raw 12-byte headers).
 
-def parse_chunks(data, pos, end):
-    out = []
-    while pos + 12 <= end:
-        cid, size, ver = struct.unpack_from('<III', data, pos)
-        cstart = pos + 12
-        cend = cstart + size
-        if cend > end:
-            size2 = size & 0x00FFFFFF
-            if cstart + size2 <= end:
-                size, cend = size2, cstart + size2
-            else:
-                break
-        out.append((cid, ver, cstart, cend))
-        pos = cend
-    return out
+Outputs (stdout or --out):
+  frames: list of {idx, name, bone, rot, pos, parent} with WORLD transforms
+  (composed from the HAnim local frames).
 
-def extract(path):
-    data = open(path, 'rb').read()
-    top = parse_chunks(data, 0, len(data))
-    clump = next(c for c in top if c[0] == 0x10)
-    children = parse_chunks(data, clump[2], clump[3])
-    fl = next(c for c in children if c[0] == 0x0E)
-    subs = parse_chunks(data, fl[2], fl[3])
-    fs = next(c for c in subs if c[0] == 0x01)
-    count, = struct.unpack_from('<I', data, fs[2])
-    rec = (fs[3] - fs[2] - 4) // count
+HAnim PLG (0x11e) layout:
+  u32 numBones, u32 flags, u32 nodeIDs[numBones], u32 numFrames,
+  per frame: f32[9] rot (LOCAL), f32[3] pos (LOCAL)
+Skin PLG (0x116) nodeIDs (matrix order) are included under 'skin_node_ids'.
+"""
+import json
+import struct
+import sys
+
+BONE_NAMES = {
+    0: "Root", 1: "Pelvis", 2: "Spine", 3: "L UpperArm", 4: "L ForeArm",
+    5: "L Hand", 6: "L Finger", 7: "L Finger01", 8: "L Finger02",
+    9: "L Toe0", 10: "L Toe01", 11: "L Toe02", 12: "L Foot",
+    13: "L Calf", 14: "L Thigh", 15: "L Clavicle", 16: "Neck",
+    17: "Head", 18: "Jaw", 19: "L Brow", 20: "L Eye lid",
+    21: "L Eye", 22: "R Brow", 23: "R Eye lid", 24: "R Eye",
+    25: "R UpperArm", 26: "R ForeArm", 27: "R Hand", 28: "R Finger",
+    29: "R Finger01", 30: "R Finger02", 31: "R Toe0", 32: "R Toe01",
+    33: "R Toe02", 34: "R Foot", 35: "R Calf", 36: "R Thigh",
+    37: "R Clavicle", 38: "Belly", 39: "R Breast", 40: "L Breast",
+}
+
+
+def chunks(data, off, end):
+    end = min(end, len(data))
+    while off + 12 <= end:
+        typ, sz, _ = struct.unpack_from('<III', data, off)
+        yield typ, sz, off + 12, off + 12 + sz
+        off += 12 + sz
+
+
+def mat_to_quat(m):
+    tr = m[0] + m[4] + m[8]
+    if tr > 0:
+        S = (tr + 1.0) ** 0.5 * 2
+        return ((m[7] - m[5]) / S, (m[2] - m[6]) / S,
+                (m[3] - m[1]) / S, 0.25 * S)
+    if m[0] > m[4] and m[0] > m[8]:
+        S = (1.0 + m[0] - m[4] - m[8]) ** 0.5 * 2
+        return (0.25 * S, (m[1] + m[3]) / S,
+                (m[2] + m[6]) / S, (m[7] - m[5]) / S)
+    if m[4] > m[8]:
+        S = (1.0 + m[4] - m[0] - m[8]) ** 0.5 * 2
+        return ((m[1] + m[3]) / S, 0.25 * S,
+                (m[5] + m[7]) / S, (m[2] - m[6]) / S)
+    S = (1.0 + m[8] - m[0] - m[4]) ** 0.5 * 2
+    return ((m[2] + m[6]) / S, (m[5] + m[7]) / S, 0.25 * S,
+            (m[3] - m[1]) / S)
+
+
+def qmul(a, b):
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return (aw * bx + ax * bw + ay * bz - az * by,
+            aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw,
+            aw * bw - ax * bx - ay * by - az * bz)
+
+
+def qrot(q, v):
+    x, y, z, w = q
+    tx = 2 * (y * v[2] - z * v[1])
+    ty = 2 * (z * v[0] - x * v[2])
+    tz = 2 * (x * v[1] - y * v[0])
+    return (v[0] + w * tx + (y * tz - z * ty),
+            v[1] + w * ty + (z * tx - x * tz),
+            v[2] + w * tz + (x * ty - y * tx))
+
+
+def parse_skin_ids(data, e):
+    num_bones, flags = struct.unpack_from('<II', data, e)
+    ids = list(struct.unpack_from('<%dI' % num_bones, data, e + 8))
+    return {'num_bones': num_bones, 'flags': flags, 'node_ids': ids}
+
+
+def extract_skeleton(data):
+    root_end = len(data)
+    hits = []
+    for typ, sz, s, e in chunks(data, 12, root_end):
+        for t2, s2, a2, b2 in chunks(data, s, e):
+            if t2 == 0x11E:
+                hits.append((a2, b2))
+    if not hits:
+        raise ValueError('no HAnim 0x11e found')
+    a, e = hits[0]
+    num_bones, flags = struct.unpack_from('<II', data, a)
+    node_ids = list(struct.unpack_from('<%dI' % num_bones, data, a + 8))
+    num_frames = struct.unpack_from('<I', data, a + 8 + 4 * num_bones)[0]
+    off = a + 12 + 4 * num_bones
+    raw = []
+    for i in range(num_frames):
+        m = list(struct.unpack_from('<12f', data, off))
+        off += 48
+        raw.append((m[0:9], m[9:12]))
+    parent = {nid: (-1 if nid == 0 else (nid & ~15) | (nid & 15) - 1)
+              for nid in node_ids}
+    # compose world transforms
+    world = {}
     frames = []
-    p = fs[2] + 4
-    for i in range(count):
-        raw = data[p:p + rec]
-        f = struct.unpack_from('<12f', raw, 0)
-        parent, = struct.unpack_from('<i', raw, 48)
-        frames.append({'idx': i, 'rot': [list(f[0:3]), list(f[3:6]), list(f[6:9])],
-                       'pos': list(f[9:12]), 'parent': parent, 'name': None, 'bone': None})
-        p += rec
-    exts = [c for c in subs if c[0] == 0x03]
-    ei = 0
-    for es, ee in ((c[2], c[3]) for c in exts):
-        nm = None; bone = None; hier = None
-        for c2, v2, s2, e2 in parse_chunks(data, es, ee):
-            if c2 == 0x253F2FE:
-                ln, = struct.unpack_from('<I', data, s2)
-                raw = data[s2 + 4:s2 + 4 + ln]
-                nm = raw.split(b'\x00')[0].decode('latin1', 'replace').strip('\r\n')
-            elif c2 == 0x11E:
-                ver_, boneid, numnodes = struct.unpack_from('<III', data, s2)
-                bone = boneid
-                if numnodes > 0:
-                    nodes = []
-                    pp = s2 + 20
-                    for k in range(numnodes):
-                        nid = struct.unpack_from('<I', data, pp)[0]
-                        nodes.append(nid)
-                        pp += 12
-                    hier = nodes
-        # empty extension (size 0) still belongs to clump-root frame
-        if ei < len(frames):
-            frames[ei]['name'] = nm
-            frames[ei]['bone'] = bone
-            if hier:
-                frames[ei]['hier'] = hier
-            ei += 1
-    return frames
+    remaining = set(node_ids)
+    order = []
+    while remaining:
+        progressed = False
+        for nid in list(remaining):
+            p = parent[nid]
+            if p not in node_ids or p in world:
+                rm, rt = raw[node_ids.index(nid)]
+                if p in world:
+                    pq, pt = world[p]
+                    q = qmul(pq, mat_to_quat(rm))
+                    t = (pt[0] + qrot(pq, rt)[0],
+                         pt[1] + qrot(pq, rt)[1],
+                         pt[2] + qrot(pq, rt)[2])
+                else:
+                    q, t = mat_to_quat(rm), tuple(rt)
+                world[nid] = (q, t)
+                order.append(nid)
+                remaining.discard(nid)
+                progressed = True
+        if not progressed:
+            for nid in list(remaining):
+                rm, rt = raw[node_ids.index(nid)]
+                world[nid] = (mat_to_quat(rm), tuple(rt))
+                order.append(nid)
+                remaining.discard(nid)
+    for nid in node_ids:
+        q, t = world[nid]
+        rm = raw[node_ids.index(nid)][0]
+        # store the WORLD rotation matrix (load_skel reads 'rot' as world)
+        x, y, z, w = q
+        rm_w = [1-2*(y*y+z*z), 2*(x*y-z*w),   2*(x*z+y*w),
+                2*(x*y+z*w),   1-2*(x*x+z*z), 2*(y*z-x*w),
+                2*(x*z-y*w),   2*(y*z+x*w),   1-2*(x*x+y*y)]
+        frames.append(dict(idx=nid, name=BONE_NAMES.get(nid), bone=nid,
+                           rot=[rm_w[0:3], rm_w[3:6], rm_w[6:9]],
+                           pos=list(t), parent=parent[nid],
+                           world_q=list(q)))
+    skin_ids = None
+    for typ, sz, s, e2 in chunks(data, 12, root_end):
+        for t2, s2, a2, b2 in chunks(data, s, e2):
+            if t2 == 0x116 and b2 - a2 > 200000:
+                try:
+                    skin_ids = parse_skin_ids(data, a2)
+                except Exception:
+                    pass
+    return {'frames': frames, 'skin_node_ids': skin_ids}
 
-def mat_normalize(rows):
-    out = []
-    for r in rows:
-        n = math.sqrt(sum(v * v for v in r)) or 1.0
-        out.append([v / n for v in r])
-    return out
 
 if __name__ == '__main__':
-    frames = extract(sys.argv[1])
-    print('frames:', len(frames))
-    for f in frames:
-        r = f['rot']
-        sc = math.sqrt(sum(r[0][j] ** 2 for j in range(3)))
-        h = f.get('hier')
-        print('%2d par=%3d bone=%-6s name=%-22r pos=(%8.5f %8.5f %8.5f) scl=%.6f' % (
-            f['idx'], f['parent'], str(f['bone']), f['name'], f['pos'][0], f['pos'][1], f['pos'][2], sc))
-        print('     R=[%9.6f %9.6f %9.6f | %9.6f %9.6f %9.6f | %9.6f %9.6f %9.6f]' % tuple(r[0] + r[1] + r[2]))
-        if h:
-            print('     HIERARCHY (%d nodes): %s' % (len(h), h))
-    if len(sys.argv) > 2:
-        json.dump(frames, open(sys.argv[2], 'w'), indent=1)
-        print('json saved:', sys.argv[2])
+    path = sys.argv[1]
+    out = sys.argv[2] if len(sys.argv) > 2 else None
+    data = open(path, 'rb').read()
+    sk = extract_skeleton(data)
+    if out:
+        with open(out, 'w') as f:
+            json.dump(sk['frames'], f)   # load_skel-compatible list
+        print('wrote', out, '(%d frames)' % len(sk['frames']))
+    else:
+        print(json.dumps(sk, indent=1)[:2000])

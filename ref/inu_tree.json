@@ -1,0 +1,540 @@
+{
+  "sha": "616bad020c846d2b3bfe4c50747c88e536b3565a",
+  "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/trees/616bad020c846d2b3bfe4c50747c88e536b3565a",
+  "tree": [
+    {
+      "path": ".gitattributes",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dfe0770424b2a19faf507a501ebfc23be8f54e7b",
+      "size": 66,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/dfe0770424b2a19faf507a501ebfc23be8f54e7b"
+    },
+    {
+      "path": "LICENSE",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f288702d2fa16d3cdf0035b15a9fcbc552cd88e7",
+      "size": 35149,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/f288702d2fa16d3cdf0035b15a9fcbc552cd88e7"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d83d18114aad988eee0e9935b5fddee886cac329",
+      "size": 5138,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/d83d18114aad988eee0e9935b5fddee886cac329"
+    },
+    {
+      "path": "core",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "a7b05208210826b42359837704868caba9037ca3",
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/trees/a7b05208210826b42359837704868caba9037ca3"
+    },
+    {
+      "path": "core/__init__.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "800512a27b3e8ee245841d80473e8bc89fcb98da",
+      "size": 73,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/800512a27b3e8ee245841d80473e8bc89fcb98da"
+    },
+    {
+      "path": "core/__pycache__",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0d6069d1a6ac1e8f5a12dda6af51955c9a1d8d89",
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/trees/0d6069d1a6ac1e8f5a12dda6af51955c9a1d8d89"
+    },
+    {
+      "path": "core/__pycache__/__init__.cpython-311.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2562d6068d64e89d99188ae38f01a02777f7e0fa",
+      "size": 148,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/2562d6068d64e89d99188ae38f01a02777f7e0fa"
+    },
+    {
+      "path": "core/__pycache__/__init__.cpython-314.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b96943a05085d0cd6925e6ecaef029daaedddb49",
+      "size": 138,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/b96943a05085d0cd6925e6ecaef029daaedddb49"
+    },
+    {
+      "path": "core/__pycache__/col.cpython-314.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f4ca89c907722856d23fd21d0039a011711a0e96",
+      "size": 39619,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/f4ca89c907722856d23fd21d0039a011711a0e96"
+    },
+    {
+      "path": "core/__pycache__/dff.cpython-314.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e09c38f05fe7c9e35f02d930b0006e07d1ff3c77",
+      "size": 148506,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/e09c38f05fe7c9e35f02d930b0006e07d1ff3c77"
+    },
+    {
+      "path": "core/__pycache__/file_lint.cpython-311.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7e4e9032fe7b1c96dfeac785c6be58424a6757fd",
+      "size": 60283,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/7e4e9032fe7b1c96dfeac785c6be58424a6757fd"
+    },
+    {
+      "path": "core/__pycache__/file_lint.cpython-314.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "455abea177e3c1c542673068709f23e2810708a4",
+      "size": 59634,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/455abea177e3c1c542673068709f23e2810708a4"
+    },
+    {
+      "path": "core/__pycache__/game_versions.cpython-314.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dd5a016645fd6b13c5ee94d7d11297185f397587",
+      "size": 14607,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/dd5a016645fd6b13c5ee94d7d11297185f397587"
+    },
+    {
+      "path": "core/__pycache__/ide.cpython-314.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e513c8c77a13d2e2f5440a69586a3dff1585a5b5",
+      "size": 50796,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/e513c8c77a13d2e2f5440a69586a3dff1585a5b5"
+    },
+    {
+      "path": "core/__pycache__/img.cpython-314.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2359d6c005ad12f8de2fe3561f991580ae70eaea",
+      "size": 37202,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/2359d6c005ad12f8de2fe3561f991580ae70eaea"
+    },
+    {
+      "path": "core/__pycache__/ipl.cpython-314.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6f18b0dad522d5ee4a255377eefd8c39a1b0d71b",
+      "size": 66851,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/6f18b0dad522d5ee4a255377eefd8c39a1b0d71b"
+    },
+    {
+      "path": "core/__pycache__/lint_profile.cpython-311.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6291f71fa5f80709de36d52ca711a64025410b31",
+      "size": 3486,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/6291f71fa5f80709de36d52ca711a64025410b31"
+    },
+    {
+      "path": "core/__pycache__/lint_profile.cpython-314.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "924e74fc8d43d45db8f7406e17a655567d1dc1b1",
+      "size": 3729,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/924e74fc8d43d45db8f7406e17a655567d1dc1b1"
+    },
+    {
+      "path": "core/__pycache__/mapdff_lint.cpython-314.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1d6ba62b70c26c4e9a85370cc9d101197a036373",
+      "size": 38843,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/1d6ba62b70c26c4e9a85370cc9d101197a036373"
+    },
+    {
+      "path": "core/__pycache__/rwbinary.cpython-314.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5c1478065895c207669912defd334b6ec2afb1d4",
+      "size": 11715,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/5c1478065895c207669912defd334b6ec2afb1d4"
+    },
+    {
+      "path": "core/__pycache__/skin_lint.cpython-314.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "389dfc67cc67b5d96dc5ba081540b673ce1dcb73",
+      "size": 21074,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/389dfc67cc67b5d96dc5ba081540b673ce1dcb73"
+    },
+    {
+      "path": "core/__pycache__/textdata_lint.cpython-314.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a1546de31fc9d6a98c927ba4d67bccfe587c7f80",
+      "size": 82225,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/a1546de31fc9d6a98c927ba4d67bccfe587c7f80"
+    },
+    {
+      "path": "core/__pycache__/texture_index.cpython-311.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bab20bcd0bf55a231f84f16bdd7d3c46ae8afb3b",
+      "size": 11781,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/bab20bcd0bf55a231f84f16bdd7d3c46ae8afb3b"
+    },
+    {
+      "path": "core/__pycache__/txd.cpython-314.pyc",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8bdebfd86831869f83930efb0145af078374ae95",
+      "size": 34832,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/8bdebfd86831869f83930efb0145af078374ae95"
+    },
+    {
+      "path": "core/bitmap_diff.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "70689a7b0e58dd68835fd050dd929c33a410bbb0",
+      "size": 3747,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/70689a7b0e58dd68835fd050dd929c33a410bbb0"
+    },
+    {
+      "path": "core/col.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3b7ce88ff44255fedcc16cc494dd2735ac56f9ef",
+      "size": 23563,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/3b7ce88ff44255fedcc16cc494dd2735ac56f9ef"
+    },
+    {
+      "path": "core/col_lint.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2494ecef9522fd2c86920476af0ebebe08975ea1",
+      "size": 13851,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/2494ecef9522fd2c86920476af0ebebe08975ea1"
+    },
+    {
+      "path": "core/cst.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6c7d09b4d849c1c8fc16e8e0e19186267a3d24e5",
+      "size": 13109,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/6c7d09b4d849c1c8fc16e8e0e19186267a3d24e5"
+    },
+    {
+      "path": "core/dff.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "27a6ebbe16f7899228c4b79baecdd7f3d2d28a21",
+      "size": 127300,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/27a6ebbe16f7899228c4b79baecdd7f3d2d28a21"
+    },
+    {
+      "path": "core/dxt.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2d9eb93bda7bab2ba201bceb94eed226a50e3901",
+      "size": 14231,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/2d9eb93bda7bab2ba201bceb94eed226a50e3901"
+    },
+    {
+      "path": "core/dxt_gpu.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0b7ad9aceaccb6ea450bbac33499e1e0da9bfd61",
+      "size": 26191,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/0b7ad9aceaccb6ea450bbac33499e1e0da9bfd61"
+    },
+    {
+      "path": "core/file_lint.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "06baae665f92cea19f502452ff7be2f90fbdde32",
+      "size": 61428,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/06baae665f92cea19f502452ff7be2f90fbdde32"
+    },
+    {
+      "path": "core/fxp.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fb4903d759aaaec4b3bf2e9e7ae0fd47b16e4074",
+      "size": 13604,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/fb4903d759aaaec4b3bf2e9e7ae0fd47b16e4074"
+    },
+    {
+      "path": "core/game_versions.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f8825e6857d7412fcd215dd5e00ee584f2ed07c1",
+      "size": 16834,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/f8825e6857d7412fcd215dd5e00ee584f2ed07c1"
+    },
+    {
+      "path": "core/gta_dat.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c8514202ae8f722b609e1007b8bac4835785c161",
+      "size": 5745,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/c8514202ae8f722b609e1007b8bac4835785c161"
+    },
+    {
+      "path": "core/ide.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d610371e489e0f0610a5048c7e8fe868eca161d8",
+      "size": 38013,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/d610371e489e0f0610a5048c7e8fe868eca161d8"
+    },
+    {
+      "path": "core/ide_flag_translate.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "40a046c1b5c2502e6b709f16bc2666c62e234213",
+      "size": 7455,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/40a046c1b5c2502e6b709f16bc2666c62e234213"
+    },
+    {
+      "path": "core/ifp.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4233b3faba49df3efa7305d4572544195e33c8da",
+      "size": 35662,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/4233b3faba49df3efa7305d4572544195e33c8da"
+    },
+    {
+      "path": "core/ifp_lint.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dfa0bf90de03c556bf1c86ca5cc4a2967456fb42",
+      "size": 13735,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/dfa0bf90de03c556bf1c86ca5cc4a2967456fb42"
+    },
+    {
+      "path": "core/img.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "281f6a50f94f3e1667f1c23133a328084a853882",
+      "size": 25167,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/281f6a50f94f3e1667f1c23133a328084a853882"
+    },
+    {
+      "path": "core/ipl.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "294759cdbabef2173df3b0ccb75381be4a56d05f",
+      "size": 41917,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/294759cdbabef2173df3b0ccb75381be4a56d05f"
+    },
+    {
+      "path": "core/lint_profile.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cd11285a2b79f8dd41dc93b142056e16ac44e3f5",
+      "size": 4046,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/cd11285a2b79f8dd41dc93b142056e16ac44e3f5"
+    },
+    {
+      "path": "core/map_lint.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b52d16185a9a56114ae563eebabc7c554d285435",
+      "size": 37504,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/b52d16185a9a56114ae563eebabc7c554d285435"
+    },
+    {
+      "path": "core/mapdff_lint.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "db4304e02f60f35a6d71d37875fea8547693239e",
+      "size": 29460,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/db4304e02f60f35a6d71d37875fea8547693239e"
+    },
+    {
+      "path": "core/mapsync",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "93d37926b56065e246ab8b41f95eb9984a67f0bc",
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/trees/93d37926b56065e246ab8b41f95eb9984a67f0bc"
+    },
+    {
+      "path": "core/mapsync/__init__.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4eb40ef60ea05b4956f32a4ec40f0cd036699284",
+      "size": 1339,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/4eb40ef60ea05b4956f32a4ec40f0cd036699284"
+    },
+    {
+      "path": "core/mapsync/ide_doc.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2180fbe0e3d27e94308cfdb815dc3b5ed76f1ce1",
+      "size": 12503,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/2180fbe0e3d27e94308cfdb815dc3b5ed76f1ce1"
+    },
+    {
+      "path": "core/mapsync/ipl_doc.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "991089ca104bdd8ca80b64afe7b019d253711c74",
+      "size": 22480,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/991089ca104bdd8ca80b64afe7b019d253711c74"
+    },
+    {
+      "path": "core/mapsync/textfile.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f11909bdf35c4e5088d2e7a29cad0fc8c43f98e9",
+      "size": 4219,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/f11909bdf35c4e5088d2e7a29cad0fc8c43f98e9"
+    },
+    {
+      "path": "core/model_classify.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e4d7e5dd173a1f3bc54a5b82d86d5ccf92ffbedb",
+      "size": 5555,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/e4d7e5dd173a1f3bc54a5b82d86d5ccf92ffbedb"
+    },
+    {
+      "path": "core/paths.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "847c09a230459fba9fff539e486190771021fc84",
+      "size": 40868,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/847c09a230459fba9fff539e486190771021fc84"
+    },
+    {
+      "path": "core/ped_mask_translate.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "099648bc96bf8f9581f8869b6b37cb3551aedcc1",
+      "size": 5017,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/099648bc96bf8f9581f8869b6b37cb3551aedcc1"
+    },
+    {
+      "path": "core/plants_dat.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "55fe9cf6d7fc39da33b773bc0c847c6eea048fed",
+      "size": 6273,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/55fe9cf6d7fc39da33b773bc0c847c6eea048fed"
+    },
+    {
+      "path": "core/rwbinary.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e0cdf61c4ca1a051dbcaa265d90aa1540ddb1bda",
+      "size": 3227,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/e0cdf61c4ca1a051dbcaa265d90aa1540ddb1bda"
+    },
+    {
+      "path": "core/skin_lint.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b5099cc647644838f4a260c236d49514192f0ddb",
+      "size": 16601,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/b5099cc647644838f4a260c236d49514192f0ddb"
+    },
+    {
+      "path": "core/surface_translate.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5cc784cf6c4dff420e9a6403cb3fc0189a19bf1f",
+      "size": 6048,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/5cc784cf6c4dff420e9a6403cb3fc0189a19bf1f"
+    },
+    {
+      "path": "core/tex_name.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fd62cc3beee5375c0280a146d1d35398b18bda13",
+      "size": 1079,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/fd62cc3beee5375c0280a146d1d35398b18bda13"
+    },
+    {
+      "path": "core/textdata_lint.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ab5606171e2d69f9dca35a83c7b00b65a4db255d",
+      "size": 67637,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/ab5606171e2d69f9dca35a83c7b00b65a4db255d"
+    },
+    {
+      "path": "core/texture_index.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6eff692d76aea72719004b95ec8f2db95e2ac8ab",
+      "size": 9708,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/6eff692d76aea72719004b95ec8f2db95e2ac8ab"
+    },
+    {
+      "path": "core/timecyc.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d251d16271023b94788c34c8325dc32fb90f94b8",
+      "size": 35662,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/d251d16271023b94788c34c8325dc32fb90f94b8"
+    },
+    {
+      "path": "core/txd.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c26fce72ea073a543ca8f5f4db48ab8feab51bde",
+      "size": 23959,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/c26fce72ea073a543ca8f5f4db48ab8feab51bde"
+    },
+    {
+      "path": "core/txd_lint.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "75f833ec93d7bb298a7a8c6fc86ef9e1e011fc93",
+      "size": 21863,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/75f833ec93d7bb298a7a8c6fc86ef9e1e011fc93"
+    },
+    {
+      "path": "core/txd_mobile.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "04a84047c060087e57f98c636fb3037e7646a959",
+      "size": 4353,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/04a84047c060087e57f98c636fb3037e7646a959"
+    },
+    {
+      "path": "core/validate.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "d08879befdb6dba2195c271f9afe3c16596a14ae",
+      "size": 27932,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/d08879befdb6dba2195c271f9afe3c16596a14ae"
+    },
+    {
+      "path": "core/vc_layers.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "428a338495ff49889dc54f8f7ea99f586e0a2c04",
+      "size": 10349,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/428a338495ff49889dc54f8f7ea99f586e0a2c04"
+    },
+    {
+      "path": "core/water.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ec5d616e3decfdf2dc1e035416491be7e135f73e",
+      "size": 6716,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/ec5d616e3decfdf2dc1e035416491be7e135f73e"
+    },
+    {
+      "path": "core/zon.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "103507b52350d4175c87d1e3f195bd7fce86bce8",
+      "size": 9555,
+      "url": "https://api.github.com/repos/INU-ez/INU_Core_GTA/git/blobs/103507b52350d4175c87d1e3f195bd7fce86bce8"
+    }
+  ],
+  "truncated": false
+}
