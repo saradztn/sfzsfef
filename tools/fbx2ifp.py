@@ -144,6 +144,10 @@ def build_src_of(bone_map):
     return src_of
 
 
+# explicit roll references: pelvis roll from the hip width (L Thigh - R Thigh)
+ROLL_PAIRS = {1: (41, 51)}
+
+
 def twist_about(q, axis, u2, v2):
     """Rotate q about `axis` so the secondary pair (u2 -> v2) best fits."""
     axis = v_norm(axis)
@@ -206,6 +210,15 @@ def build_matchers(sk, skin_q, skin_T, by_name, src_of, bone_map, a_q):
             c = kids[0]
             primary = seg(v_sub(skin_T[c], skin_T[bid]),
                           to_game(v_sub(src_rest[src_of[c]][1], p_rest)))
+            if primary is None:
+                # degenerate link (CJ Pelvis->Spine is ~1 mm): use the child's
+                # own first mapped segment as the direction reference
+                gks = [g for g in sk if sk[g]['parent'] == c and g in src_of]
+                if gks:
+                    g = gks[0]
+                    primary = seg(v_sub(skin_T[g], skin_T[c]),
+                                  to_game(v_sub(src_rest[src_of[g]][1],
+                                                src_rest[src_of[c]][1])))
         if primary is None:
             par_cj = sk[bid]['parent']
             par_src = by_name[nm].parent
@@ -219,7 +232,12 @@ def build_matchers(sk, skin_q, skin_T, by_name, src_of, bone_map, a_q):
         if primary is None:
             primary = (v_norm(mat_vec(q_to_mat(skin_q[bid]), (1.0, 0.0, 0.0))),
                        v_norm(mat_vec(q_to_mat(q_rest), (1.0, 0.0, 0.0))))
-        if len(kids) > 1:
+        if bid in ROLL_PAIRS and all(b in src_of for b in ROLL_PAIRS[bid]):
+            l, r = ROLL_PAIRS[bid]
+            secondary = seg(v_sub(skin_T[l], skin_T[r]),
+                            to_game(v_sub(src_rest[src_of[l]][1],
+                                          src_rest[src_of[r]][1])))
+        elif len(kids) > 1:
             c2 = kids[1]
             secondary = seg(v_sub(skin_T[c2], skin_T[bid]),
                             to_game(v_sub(src_rest[src_of[c2]][1], p_rest)))

@@ -139,6 +139,17 @@ def main():
                  for bid in src_of
                  if [c for c in sk if sk[c]['parent'] == bid]
                  and [c for c in sk if sk[c]['parent'] == bid][0] in src_of]
+    # skip degenerate CJ links (Pelvis->Spine is ~1 mm in player.dff: its
+    # direction is meaningless). The pelvis is checked by hip width instead.
+    def _blen(b, c):
+        d = conv.v_sub(skin_T[c], skin_T[b])
+        return math.sqrt(conv.v_dot(d, d))
+    seg_pairs = [(b, c) for b, c in seg_pairs if _blen(b, c) > 0.01]
+    # Spine->Spine1 spans 3 folded source bones (Spine1..Spine4): bends inside
+    # the fold cannot be represented by one CJ bone -> reported separately.
+    FOLDED = {(2, 3)}
+    max_fold_err = 0.0
+    max_hip_err = 0.0
 
     tracks = {t['id']: t for t in a['tracks']}
     order = []
@@ -185,8 +196,20 @@ def main():
             d_src = mat_vec(q_to_mat(a_q), d_src)
             if conv.v_dot(d_ach, d_ach) > 1e-8 and conv.v_dot(d_src, d_src) > 1e-8:
                 e = vang(d_ach, d_src)
+                if (bid, cid) in FOLDED:
+                    max_fold_err = max(max_fold_err, e)
+                    continue
                 max_seg_err = max(max_seg_err, e)
                 seg_worst[(bid, cid)] = max(seg_worst.get((bid, cid), 0.0), e)
+        # pelvis orientation: hip width (L Thigh - R Thigh) rotated by V(pelvis)
+        if 1 in src_of and 41 in src_of and 51 in src_of:
+            V1 = q_mul(fw[1], skin_q[1])
+            h_ach = mat_vec(q_to_mat(V1), conv.v_sub(skin_T[41], skin_T[51]))
+            Wl = by_name[src_of[41]].world_mat(times[k])
+            Wr = by_name[src_of[51]].world_mat(times[k])
+            h_src = mat_vec(q_to_mat(a_q), conv.v_sub((Wl[0][3], Wl[1][3], Wl[2][3]),
+                                                       (Wr[0][3], Wr[1][3], Wr[2][3])))
+            max_hip_err = max(max_hip_err, vang(h_ach, h_src))
         # head-roll regression check (Neck->Head pair, convention-clean)
         if 5 in src_of and 4 in src_of:
             V5 = q_mul(fw[5], skin_q[5])
@@ -207,6 +230,8 @@ def main():
     print('worst segments:', ', '.join('%s->%s %.2f' %
           (src_of[b], src_of[c], e) for (b, c), e in worst5))
     print('head-roll check (Neck->Head rel): max %.4f deg' % max_head_roll)
+    print('pelvis hip-width direction: max %.4f deg' % max_hip_err)
+    print('folded spine (Spine1..Spine4 -> CJ Spine): max %.4f deg (info)' % max_fold_err)
 
     print()
     print('== E. root translation ==')
@@ -216,6 +241,7 @@ def main():
     print('max |T| %.3f, max step %.4f' % (mx, step))
 
     passed = (max_vis_err < 0.5 and max_seg_err < 0.5 and max_head_roll < 1.0
+              and max_hip_err < 1.0 and max_fold_err < 5.0
               and ok and step < 0.2)
     print()
     print('RESULT:', 'PASS' if passed else 'FAIL')
